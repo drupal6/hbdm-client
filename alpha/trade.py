@@ -45,13 +45,14 @@ class Trade:
             and this callback function will be executed asynchronous after Trade module object initialized successfully.
     """
 
-    def __init__(self, strategy=None, platform=None, symbol=None, host=None, wss=None, account=None, access_key=None,
-                 secret_key=None, asset_update_callback=None, order_update_callback=None,
+    def __init__(self, strategy=None, platform=None, symbol=None, contract_type=None, host=None, wss=None, account=None,
+                 access_key=None, secret_key=None, asset_update_callback=None, order_update_callback=None,
                  position_update_callback=None, init_success_callback=None, **kwargs):
         """initialize trade object."""
         kwargs["strategy"] = strategy
         kwargs["platform"] = platform
         kwargs["symbol"] = symbol
+        kwargs["contract_type"] = contract_type
         kwargs["host"] = host
         kwargs["wss"] = wss
         kwargs["account"] = account
@@ -69,6 +70,8 @@ class Trade:
 
         if platform == const.HUOBI_SWAP:
             from alpha.platforms.swap.huobi_swap_trade import HuobiSwapTrade as T
+        elif platform == const.HUOBI_DELIVERY:
+            from alpha.platforms.delivery.huobi_delivery_trade import HuobiDeliveryTrade as T
         else:
             logger.error("platform error:", platform, caller=self)
             e = Error("platform error")

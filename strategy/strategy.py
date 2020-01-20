@@ -32,6 +32,7 @@ class MyStrategy:
     def __init__(self):
         """ 初始化
         """
+        print(config)
         self.strategy = config.strategy
         self.platform = config.accounts[0]["platform"]
         self.account = config.accounts[0]["account"]
@@ -84,6 +85,7 @@ class MyStrategy:
         cc = {
             "platform": self.platform,
             "symbols": [self.symbol],
+            "contract_type": [self.contract_type],
             "channels": self.channels,
             "orderbook_length": self.orderbook_length,
             "orderbooks_length": self.orderbooks_length,

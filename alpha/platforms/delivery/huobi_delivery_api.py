@@ -172,7 +172,6 @@ class HuobiDeliveryRestAPI:
         body = orders_data
         success, error = await self.request("POST", uri, body=body, auth=True)
         return success, error
-        
 
     async def revoke_orders(self, symbol, order_id=None, client_order_id=None):
         """

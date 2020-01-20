@@ -37,35 +37,13 @@ from alpha.order import ORDER_TYPE_LIMIT, ORDER_TYPE_MARKET, ORDER_TYPE_MAKER, O
 from alpha.order import ORDER_STATUS_SUBMITTED, ORDER_STATUS_PARTIAL_FILLED, ORDER_STATUS_FILLED, \
     ORDER_STATUS_CANCELED, ORDER_STATUS_FAILED, TRADE_TYPE_BUY_OPEN, TRADE_TYPE_SELL_OPEN, TRADE_TYPE_BUY_CLOSE, \
     TRADE_TYPE_SELL_CLOSE
-from .huobi_delivery_api import HuobiSwapRestAPI
+from .huobi_delivery_api import HuobiDeliveryRestAPI
 
 
-__all__ = ("HuobiSwapTrade", )
-    
-class HuobiSwapTrade(Websocket):
-    """ Huobi Swap Trade module. You can initialize trade object with some attributes in kwargs.
+__all__ = ("HuobiDeliveryTrade", )
 
-    Attributes:
-        account: Account name for this trade exchange.
-        strategy: What's name would you want to created for you strategy.
-        symbol: Symbol name for your trade.
-        host: HTTP request host. default `https://api.hbdm.com"`.
-        wss: Websocket address. default `wss://www.hbdm.com`.
-        access_key: Account's ACCESS KEY.
-        secret_key Account's SECRET KEY.
-        asset_update_callback: You can use this param to specific a async callback function when you initializing Trade
-            object. `asset_update_callback` is like `async def on_asset_update_callback(asset: Asset): pass` and this
-            callback function will be executed asynchronous when received AssetEvent.
-        order_update_callback: You can use this param to specific a async callback function when you initializing Trade
-            object. `order_update_callback` is like `async def on_order_update_callback(order: Order): pass` and this
-            callback function will be executed asynchronous when some order state updated.
-        position_update_callback: You can use this param to specific a async callback function when you initializing Trade
-            object. `position_update_callback` is like `async def on_position_update_callback(order: Position): pass` and
-            this callback function will be executed asynchronous when some position state updated.
-        init_success_callback: You can use this param to specific a async callback function when you initializing Trade
-            object. `init_success_callback` is like `async def on_init_success_callback(success: bool, error: Error, **kwargs): pass`
-            and this callback function will be executed asynchronous after Trade module object initialized successfully.
-    """
+
+class HuobiDeliveryTrade(Websocket):
 
     def __init__(self, **kwargs):
         """Initialize."""
@@ -106,22 +84,22 @@ class HuobiSwapTrade(Websocket):
         self._asset_update_callback = kwargs.get("asset_update_callback")
         self._init_success_callback = kwargs.get("init_success_callback")
 
-        url = self._wss + "/swap-notification"
-        super(HuobiSwapTrade, self).__init__(url, send_hb_interval=5)
+        url = self._wss + "/notification"
+        super(HuobiDeliveryTrade, self).__init__(url, send_hb_interval=5)
 
         self._assets = {}  # Asset detail, {"BTC": {"free": "1.1", "locked": "2.2", "total": "3.3"}, ... }.
         self._orders = {}  # Order objects, {"order_id": order, ...}.
         self._position = Position(self._platform, self._account, self._strategy, self._symbol + '/' + self._contract_type)
 
-        self._order_channel = "orders.{symbol}".format(symbol=self._symbol)
-        self._position_channel = "positions.{symbol}".format(symbol=self._symbol)
-        self._asset_channel = "accounts.{symbol}".format(symbol=self._symbol)
+        self._order_channel = "orders.{symbol}".format(symbol=self._symbol)  # 订阅订单成交数据
+        self._position_channel = "positions.{symbol}".format(symbol=self._symbol)  # 订阅某个品种下的持仓变动信息
+        self._asset_channel = "accounts.{symbol}".format(symbol=self._symbol)  # 订阅某个品种下的资产变动信息
 
         self._subscribe_order_ok = False
         self._subscribe_position_ok = False
         self._subscribe_asset_ok = False
 
-        self._rest_api = HuobiSwapRestAPI(self._host, self._access_key, self._secret_key)
+        self._rest_api = HuobiDeliveryRestAPI(self._host, self._access_key, self._secret_key)
 
         self.initialize()
 
@@ -260,20 +238,6 @@ class HuobiSwapTrade(Websocket):
                 self._update_asset(data)
 
     async def create_order(self, action, price, quantity, order_type=ORDER_TYPE_LIMIT,  *args, **kwargs):
-        """ Create an order.
-
-        Args:
-            action: Trade direction, BUY or SELL.
-            price: Price of each contract.
-            quantity: The buying or selling quantity.
-            order_type: Order type, LIMIT or MARKET.
-            kwargs:
-                lever_rate: Leverage rate, 10 or 20.
-
-        Returns:
-            order_no: Order ID if created successfully, otherwise it's None.
-            error: Error information, otherwise it's None.
-        """
         if int(quantity) > 0:
             if action == ORDER_ACTION_BUY:
                 direction = "buy"
@@ -309,9 +273,10 @@ class HuobiSwapTrade(Websocket):
             return None, "order type error"
 
         quantity = abs(int(quantity))
-        result, error = await self._rest_api.create_order(self._symbol, self._contract_type, '',
-                                                          price, quantity, direction, offset, lever_rate,
-                                                          order_price_type)
+        result, error = await self._rest_api.create_order(symbol=self._symbol, contract_type=self._contract_type,
+                                                          contract_code="", volume=quantity, direction=direction,
+                                                          offset=offset, lever_rate=lever_rate,
+                                                          order_price_type=order_price_type, price=price)
         if error:
             return None, error
         return str(result["data"]["order_id"]), None
@@ -404,7 +369,7 @@ class HuobiSwapTrade(Websocket):
 
         # If len(order_nos) == 1, you will cancel an order.
         if len(order_nos) == 1:
-            success, error = await self._rest_api.revoke_order(self._symbol, order_nos[0])
+            success, error = await self._rest_api.revoke_orders(self._symbol, order_nos[0])
             if error:
                 return order_nos[0], error
             if success.get("errors"):

@@ -24,22 +24,13 @@ from alpha.orderbook import Orderbook
 from alpha.markettrade import Trade
 from alpha.kline import Kline
 
-class HuobiSwapMarket(Websocket):
-    """ Huobi Swap Market Server.
-
-    Attributes:
-        kwargs:
-            platform: Exchange platform name, must be `huobi_swap`.
-            wss: Exchange Websocket host address.
-            symbols: Trade pair list, e.g. ["BTC-CQ"].
-            channels: channel list, only `orderbook`, `kline` and `trade` to be enabled.
-            orderbook_length: The length of orderbook's data to be published via OrderbookEvent, default is 10.
-    """
+class HuobiDeliveryMarket(Websocket):
 
     def __init__(self, **kwargs):
         self._platform = kwargs["platform"]
         self._wss = kwargs.get("wss", "wss://www.hbdm.com")
         self._symbols = list(set(kwargs.get("symbols")))
+        self._contract_types = list(set(kwargs.get("contract_type")))
         self._channels = kwargs.get("channels")
         self._orderbook_length = kwargs.get("orderbook_length", 10)
         self._orderbooks_length = kwargs.get("orderbooks_length", 100)
@@ -54,8 +45,8 @@ class HuobiSwapMarket(Websocket):
         self._klines = deque(maxlen=self._klines_length)
         self._trades = deque(maxlen=self._trades_length)
 
-        url = self._wss + "/swap-ws"
-        super(HuobiSwapMarket, self).__init__(url, send_hb_interval=5)
+        url = self._wss + "/ws"
+        super(HuobiDeliveryMarket, self).__init__(url, send_hb_interval=5)
         self.initialize()
     
     @property
@@ -84,8 +75,8 @@ class HuobiSwapMarket(Websocket):
         """
         for ch in self._channels:
             if ch == "kline":
-                for symbol in self._symbols:
-                    channel = self._symbol_to_channel(symbol, "kline")
+                for contract_type in self._contract_types:
+                    channel = self._symbol_to_channel(contract_type, "kline")
                     if not channel:
                         continue
                     kline = {
@@ -93,8 +84,8 @@ class HuobiSwapMarket(Websocket):
                     }
                     await self.ws.send_json(kline)
             elif ch == "orderbook":
-                for symbol in self._symbols:
-                    channel = self._symbol_to_channel(symbol, "depth")
+                for contract_type in self._contract_types:
+                    channel = self._symbol_to_channel(contract_type, "depth")
                     if not channel:
                         continue
                     data = {
@@ -102,8 +93,8 @@ class HuobiSwapMarket(Websocket):
                     }
                     await self.ws.send_json(data)
             elif ch == "trade":
-                for symbol in self._symbols:
-                    channel = self._symbol_to_channel(symbol, "trade")
+                for contract_type in self._contract_types:
+                    channel = self._symbol_to_channel(contract_type, "trade")
                     if not channel:
                         continue
                     data = {

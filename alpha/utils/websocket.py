@@ -59,6 +59,7 @@ class Websocket:
         except aiohttp.client_exceptions.ClientConnectorError:
             logger.error("connect to server error! url:", self._url, caller=self)
             return
+
         asyncio.get_event_loop().create_task(self.connected_callback())
         asyncio.get_event_loop().create_task(self.receive())
 

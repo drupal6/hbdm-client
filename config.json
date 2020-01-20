@@ -1,26 +1,26 @@
 {
-    "SERVER_ID": "swap_maker_strategy",
+    "SERVER_ID": "delivery_maker_strategy",
     "LOG": {
         "console": true,
         "level": "INFO",
-        "path": "logs/swap_maker_strategy",
-        "name": "swap_maker_strategy.log",
+        "path": "logs/delivery_maker_strategy",
+        "name": "delivery_maker_strategy.log",
         "clear": false,
         "backup_count": 5
     },
     "ACCOUNTS": [
         {
-            "platform": "huobi_swap",
+            "platform": "huobi_delivery",
             "account": "account",
-            "host": "https://xxx.pro",
-            "wss": "wss://yyy.pro",
-            "access_key": "",
-            "secret_key": ""
+            "host": "https://api.btcgateway.pro",
+            "wss": "wss://api.btcgateway.pro",
+            "access_key": "xxxx",
+            "secret_key": "xxxx"
         }
     ],
     "MARKETS": [
         {
-            "platform": "huobi_swap",
+            "platform": "huobi_delivery",
             "channels":[
                 "orderbook", "kline", "trade"
             ],
@@ -28,11 +28,11 @@
             "orderbooks_length": 100,
             "klines_length": 100,
             "trades_length": 100,
-            "wss": "wss://yyy.pro"
+            "wss": "wss://www.btcgateway.pro"
 
         }
     ],
     "strategy": "my_test_strategy",
-    "symbol": "BTC-USD",
-    "contract_type": "SWAP"
+    "symbol": "BSV",
+    "contract_type": "BSV_CW"
 }

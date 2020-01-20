@@ -34,12 +34,13 @@ class Market:
             and this callback function will be executed asynchronous when trade updated.
     """
 
-    def __init__(self, platform=None, symbols=None, channels=None, orderbook_length=None, orderbooks_length=None,\
-                klines_length=None, trades_length=None, wss=None, \
-                orderbook_update_callback=None, kline_update_callback=None, trade_update_callback=None, **kwargs):
+    def __init__(self, platform=None, symbols=None, contract_type=None, channels=None, orderbook_length=None,
+                 orderbooks_length=None, klines_length=None, trades_length=None, wss=None,
+                 orderbook_update_callback=None, kline_update_callback=None, trade_update_callback=None, **kwargs):
         """initialize trade object."""
         kwargs["platform"] = platform
         kwargs["symbols"] = symbols
+        kwargs["contract_type"] = contract_type
         kwargs["channels"] = channels
         kwargs["orderbook_length"] = orderbook_length
         kwargs["orderbooks_length"] = orderbooks_length
@@ -57,6 +58,8 @@ class Market:
 
         if platform == const.HUOBI_SWAP:
             from alpha.platforms.swap.huobi_swap_market import HuobiSwapMarket as M
+        if platform == const.HUOBI_DELIVERY:
+            from alpha.platforms.delivery.huobi_delivery_market import HuobiDeliveryMarket as M
         else:
             logger.error("platform error:", platform, caller=self)
             return
