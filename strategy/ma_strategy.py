@@ -23,11 +23,12 @@ from alpha.asset import Asset
 from alpha.position import Position
 from alpha.error import Error
 from alpha.tasks import LoopRunTask
+from alpha.utils.klineutils import interval_handler
 from alpha.order import ORDER_ACTION_SELL, ORDER_ACTION_BUY, ORDER_STATUS_FAILED, ORDER_STATUS_CANCELED, ORDER_STATUS_FILLED,\
     ORDER_TYPE_LIMIT, ORDER_TYPE_MARKET
 
 
-class MyStrategy:
+class MaStrategy:
 
     def __init__(self):
         """ 初始化
@@ -64,6 +65,8 @@ class MyStrategy:
         self.ask1_volume = 0
         self.bid1_volume = 0
 
+        self.periods = [5, 10]
+
         # rest api
         if self.platform == HUOBI_SWAP:
             from alpha.platforms.swap.huobi_swap_api import HuobiSwapRestAPI
@@ -95,8 +98,8 @@ class MyStrategy:
         # 行情模块
         cc = {
             "platform": self.platform,
-            "symbols": [self.symbol],
-            "contract_type": [self.contract_type],
+            "symbol": self.symbol,
+            "contract_type": self.contract_type,
             "channels": self.channels,
             "orderbook_length": self.orderbook_length,
             "orderbook_step": self.orderbook_step,
@@ -113,15 +116,19 @@ class MyStrategy:
         self.market = Market(**cc)
         
         # 1秒执行1次
-        LoopRunTask.register(self.on_ticker, 1)
+        LoopRunTask.register(self.on_ticker, 5)
 
     async def on_ticker(self, *args, **kwargs):
-        """ 定时执行任务
-        """
-        ts_diff = int(time.time()*1000) - self.last_orderbook_timestamp
-        if ts_diff > self.orderbook_invalid_seconds * 1000:
-            logger.warn("received orderbook timestamp exceed:", self.strategy, self.symbol, ts_diff, caller=self)
+        klines = self.market.klines
+        if len(klines) != self.klines_length:
             return
+        ma_point = interval_handler(values=klines, periods=self.periods, vtype="close")
+        if ma_point[self.periods[0]][1] < ma_point[self.periods[1]][1]:
+            if ma_point[self.periods[0]][0] >= ma_point[self.periods[1]][0]:
+                print(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()), "开多平空")
+        elif ma_point[self.periods[0]][1] > ma_point[self.periods[1]][1]:
+            if ma_point[self.periods[0]][0] <= ma_point[self.periods[1]][0]:
+                print(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()), "开空平多")
         # await self.cancel_orders()
         # await self.place_orders()
 
@@ -132,9 +139,9 @@ class MyStrategy:
         if order_nos and self.last_ask_price != self.ask1_price:
             _, errors = await self.trader.revoke_order(*order_nos)
             if errors:
-                logger.error(self.strategy,"cancel future order error! error:", errors, caller=self)
+                logger.error(self.strategy, "cancel future order error! error:", errors, caller=self)
             else:
-                logger.info(self.strategy,"cancel future order:", order_nos, caller=self)
+                logger.info(self.strategy, "cancel future order:", order_nos, caller=self)
     
     async def place_orders(self):
         """ 下单

@@ -47,7 +47,7 @@ class Trade:
 
     def __init__(self, strategy=None, platform=None, symbol=None, contract_type=None, host=None, wss=None, account=None,
                  access_key=None, secret_key=None, asset_update_callback=None, order_update_callback=None,
-                 position_update_callback=None, init_success_callback=None, **kwargs):
+                 position_update_callback=None, init_success_callback=None, rest_api=None, **kwargs):
         """initialize trade object."""
         kwargs["strategy"] = strategy
         kwargs["platform"] = platform
@@ -55,6 +55,7 @@ class Trade:
         kwargs["contract_type"] = contract_type
         kwargs["host"] = host
         kwargs["wss"] = wss
+        kwargs["rest_api"] = rest_api
         kwargs["account"] = account
         kwargs["access_key"] = access_key
         kwargs["secret_key"] = secret_key
@@ -67,6 +68,7 @@ class Trade:
         self._order_update_callback = order_update_callback
         self._position_update_callback = position_update_callback
         self._init_success_callback = init_success_callback
+        self._rest_api = rest_api
 
         if platform == const.HUOBI_SWAP:
             from alpha.platforms.swap.huobi_swap_trade import HuobiSwapTrade as T
@@ -94,7 +96,7 @@ class Trade:
 
     @property
     def rest_api(self):
-        return self._t.rest_api
+        return self._rest_api
 
     async def create_order(self, action, price, quantity, order_type=ORDER_TYPE_LIMIT, **kwargs):
         """ Create an order.

@@ -14,8 +14,8 @@
             "account": "account",
             "host": "https://api.btcgateway.pro",
             "wss": "wss://api.btcgateway.pro",
-            "access_key": "xxxx",
-            "secret_key": "xxxx"
+            "access_key": "xxx",
+            "secret_key": "xxx"
         }
     ],
     "MARKETS": [
@@ -25,14 +25,16 @@
                 "orderbook", "kline", "trade"
             ],
             "orderbook_length": 10,
+            "orderbook_step": "step6",
             "orderbooks_length": 100,
-            "klines_length": 100,
+            "klines_length": 200,
+            "klines_period": "1min",
             "trades_length": 100,
             "wss": "wss://www.btcgateway.pro"
 
         }
     ],
-    "strategy": "my_test_strategy",
-    "symbol": "BSV",
-    "contract_type": "BSV_CW"
+    "strategy": "ma_strategy",
+    "symbol": "BCH",
+    "contract_type": "BCH_CW"
 }

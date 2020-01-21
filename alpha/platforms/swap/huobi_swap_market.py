@@ -39,11 +39,13 @@ class HuobiSwapMarket(Websocket):
     def __init__(self, **kwargs):
         self._platform = kwargs["platform"]
         self._wss = kwargs.get("wss", "wss://www.hbdm.com")
-        self._symbols = list(set(kwargs.get("symbols")))
+        self._symbol = kwargs.get("symbol")
         self._channels = kwargs.get("channels")
         self._orderbook_length = kwargs.get("orderbook_length", 10)
+        self._orderbook_step = kwargs.get("orderbook_step", "step6")
         self._orderbooks_length = kwargs.get("orderbooks_length", 100)
         self._klines_length = kwargs.get("klines_length", 100)
+        self._klines_period = kwargs.get("klines_period", "1min")
         self._trades_length = kwargs.get("trades_length", 100)
         self._orderbook_update_callback = kwargs.get("orderbook_update_callback")
         self._kline_update_callback = kwargs.get("kline_update_callback")
@@ -84,32 +86,29 @@ class HuobiSwapMarket(Websocket):
         """
         for ch in self._channels:
             if ch == "kline":
-                for symbol in self._symbols:
-                    channel = self._symbol_to_channel(symbol, "kline")
-                    if not channel:
-                        continue
-                    kline = {
-                        "sub": channel
-                    }
-                    await self.ws.send_json(kline)
+                channel = self._symbol_to_channel(self._symbol, "kline")
+                if not channel:
+                    continue
+                kline = {
+                    "sub": channel
+                }
+                await self.ws.send_json(kline)
             elif ch == "orderbook":
-                for symbol in self._symbols:
-                    channel = self._symbol_to_channel(symbol, "depth")
-                    if not channel:
-                        continue
-                    data = {
-                        "sub": channel
-                    }
-                    await self.ws.send_json(data)
+                channel = self._symbol_to_channel(self._symbol, "depth")
+                if not channel:
+                    continue
+                data = {
+                    "sub": channel
+                }
+                await self.ws.send_json(data)
             elif ch == "trade":
-                for symbol in self._symbols:
-                    channel = self._symbol_to_channel(symbol, "trade")
-                    if not channel:
-                        continue
-                    data = {
-                        "sub": channel
-                    }
-                    await self.ws.send_json(data)
+                channel = self._symbol_to_channel(self._symbol, "trade")
+                if not channel:
+                    continue
+                data = {
+                    "sub": channel
+                }
+                await self.ws.send_json(data)
             else:
                 logger.error("channel error! channel:", ch, caller=self)
 
@@ -146,9 +145,9 @@ class HuobiSwapMarket(Websocket):
             channel_type: channel name, kline / ticker / depth.
         """
         if channel_type == "kline":
-            channel = "market.{s}.kline.1min".format(s=symbol.upper())
+            channel = "market.{s}.kline.{p}".format(s=symbol.upper(), p=self._klines_period)
         elif channel_type == "depth":
-            channel = "market.{s}.depth.step6".format(s=symbol.upper())
+            channel = "market.{s}.depth.{d}".format(s=symbol.upper(), d=self._orderbook_step)
         elif channel_type == "trade":
             channel = "market.{s}.trade.detail".format(s=symbol.upper())
         else:

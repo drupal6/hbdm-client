@@ -83,6 +83,7 @@ class HuobiDeliveryTrade(Websocket):
         self._position_update_callback = kwargs.get("position_update_callback")
         self._asset_update_callback = kwargs.get("asset_update_callback")
         self._init_success_callback = kwargs.get("init_success_callback")
+        self._rest_api = kwargs.get("rest_api")
 
         url = self._wss + "/notification"
         super(HuobiDeliveryTrade, self).__init__(url, send_hb_interval=5)
@@ -99,7 +100,6 @@ class HuobiDeliveryTrade(Websocket):
         self._subscribe_position_ok = False
         self._subscribe_asset_ok = False
 
-        self._rest_api = HuobiDeliveryRestAPI(self._host, self._access_key, self._secret_key)
 
         self.initialize()
 
@@ -144,7 +144,6 @@ class HuobiDeliveryTrade(Websocket):
     
     def generate_signature(self, method, params, request_path):
         host_url = urllib.parse.urlparse(self._wss).hostname.lower()
-        #host_url = "172.18.6.227:9090"
         sorted_params = sorted(params.items(), key=lambda d: d[0], reverse=False)
         encode_params = urllib.parse.urlencode(sorted_params)
         payload = [method, host_url, request_path, encode_params]

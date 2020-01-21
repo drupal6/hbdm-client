@@ -58,6 +58,28 @@ class HuobiDeliveryRestAPI:
         success, error = await self.request("GET", uri, params)
         return success, error
 
+    async def get_klines(self, contract_type, period="1min", size=150, _from=None, _to=None):
+        """
+        获取k先数据
+        :param contract_type:如"BTC_CW"表示BTC当周合约，"BTC_NW"表示BTC次周合约，"BTC_CQ"表示BTC季度合约
+        :param period:1min, 5min, 15min, 30min, 60min,4hour,1day, 1mon
+        :param size:[1,2000]
+        :param _from:开始时间戳 10位 单位S
+        :param _to:结束时间戳 10位 单位S
+        :return:
+        """
+        uri = "/market/history/kline"
+        params = {
+            "symbol": contract_type,
+            "period": period,
+            "size": size
+        }
+        if _from and _to:
+            params["from"] = _from
+            params["_to"] = _to
+        success, error = await self.request("GET", uri, params=params)
+        return success, error
+
     async def get_price_limit(self, symbol=None, contract_type=None, contract_code=None):
         """
         获取荷叶最高限价和最低限价

@@ -34,27 +34,33 @@ class Market:
             and this callback function will be executed asynchronous when trade updated.
     """
 
-    def __init__(self, platform=None, symbols=None, contract_type=None, channels=None, orderbook_length=None,
-                 orderbooks_length=None, klines_length=None, trades_length=None, wss=None,
-                 orderbook_update_callback=None, kline_update_callback=None, trade_update_callback=None, **kwargs):
+    def __init__(self, platform=None, symbol=None, contract_type=None, channels=None, orderbook_length=None,
+                 orderbook_step=None, orderbooks_length=None, klines_length=None, klines_period=None,
+                 trades_length=None, wss=None, orderbook_update_callback=None, kline_update_callback=None,
+                 trade_update_callback=None, rest_api=None, **kwargs):
         """initialize trade object."""
         kwargs["platform"] = platform
-        kwargs["symbols"] = symbols
+        kwargs["symbol"] = symbol
         kwargs["contract_type"] = contract_type
         kwargs["channels"] = channels
         kwargs["orderbook_length"] = orderbook_length
+        kwargs["orderbook_step"] = orderbook_step
+        kwargs["orderbook_length"] = orderbook_length
         kwargs["orderbooks_length"] = orderbooks_length
         kwargs["klines_length"] = klines_length
+        kwargs["klines_period"] = klines_period
         kwargs["trades_length"] = trades_length
         kwargs["wss"] = wss
         kwargs["orderbook_update_callback"] = orderbook_update_callback
         kwargs["kline_update_callback"] = kline_update_callback
         kwargs["trade_update_callback"] = trade_update_callback
+        kwargs["rest_api"] = rest_api
 
         self._raw_params = copy.copy(kwargs)
         self._on_orderbook_update_callback = orderbook_update_callback
         self._on_kline_update_callback = kline_update_callback
         self._on_trade_update_callback = trade_update_callback
+        self._rest_api = rest_api
 
         if platform == const.HUOBI_SWAP:
             from alpha.platforms.swap.huobi_swap_market import HuobiSwapMarket as M
@@ -76,3 +82,7 @@ class Market:
     @property
     def trades(self):
         return self._m.trades
+
+    @property
+    def rest_api(self):
+        return self._rest_api

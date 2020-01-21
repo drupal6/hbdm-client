@@ -16,9 +16,7 @@ def make_zip(config):
             continue
         if parent.endswith("inspectionProfiles"):
             continue
-        print(parent)
         for filename in filenames:
-            print(filename)
             pathfile = os.path.join(parent, filename)
             arcname = pathfile[pre_len:].strip(os.path.sep)   #相对路径
             zipf.write(pathfile, arcname)
@@ -104,11 +102,11 @@ class Config:
 if __name__ == '__main__':
     config = Config()
     make_zip(config)
-    # print("压缩完毕")
-    #
-    # s = open_ssh(config)
-    # ssh_put(s, config)
-    # cmd = "cd %s; unzip -o %s;" %(config.remove_path, config.zipfilename)
-    # ssh_cmd(s, cmd)
-    # close_ssh(s)
-    # print("推送完毕")
+    print("压缩完毕")
+
+    s = open_ssh(config)
+    ssh_put(s, config)
+    cmd = "cd %s; unzip -o %s; rm -rf %s;" %(config.remove_path, config.zipfilename, config.zipfilename)
+    ssh_cmd(s, cmd)
+    close_ssh(s)
+    print("推送完毕")

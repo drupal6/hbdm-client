@@ -29,16 +29,19 @@ class HuobiDeliveryMarket(Websocket):
     def __init__(self, **kwargs):
         self._platform = kwargs["platform"]
         self._wss = kwargs.get("wss", "wss://www.hbdm.com")
-        self._symbols = list(set(kwargs.get("symbols")))
-        self._contract_types = list(set(kwargs.get("contract_type")))
+        self._symbol = kwargs.get("symbol")
+        self._contract_type = kwargs.get("contract_type")
         self._channels = kwargs.get("channels")
         self._orderbook_length = kwargs.get("orderbook_length", 10)
+        self._orderbook_step = kwargs.get("orderbook_step", "step6")
         self._orderbooks_length = kwargs.get("orderbooks_length", 100)
         self._klines_length = kwargs.get("klines_length", 100)
+        self._klines_period = kwargs.get("klines_period", "1min")
         self._trades_length = kwargs.get("trades_length", 100)
         self._orderbook_update_callback = kwargs.get("orderbook_update_callback")
         self._kline_update_callback = kwargs.get("kline_update_callback")
         self._trade_update_callback = kwargs.get("trade_update_callback")
+        self._rest_api = kwargs.get("rest_api")
 
         self._c_to_s = {}  # {"channel": "symbol"}
         self._orderbooks = deque(maxlen=self._orderbooks_length) 
@@ -48,7 +51,7 @@ class HuobiDeliveryMarket(Websocket):
         url = self._wss + "/ws"
         super(HuobiDeliveryMarket, self).__init__(url, send_hb_interval=5)
         self.initialize()
-    
+
     @property
     def orderbooks(self):
         return copy.copy(self._orderbooks)
@@ -60,6 +63,13 @@ class HuobiDeliveryMarket(Websocket):
     @property
     def trades(self):
         return copy.copy(self._trades)
+
+    @property
+    def rest_api(self):
+        return self._rest_api
+
+    def clear_data(self):
+        self
 
     async def _send_heartbeat_msg(self, *args, **kwargs):
         """ 发送心跳给服务器
@@ -73,34 +83,38 @@ class HuobiDeliveryMarket(Websocket):
     async def connected_callback(self):
         """ After create Websocket connection successfully, we will subscribing orderbook/trade events.
         """
+        async def get_history_Klines():
+                success, error = await self._rest_api.get_klines(contract_type=self._contract_type,
+                                                                 period=self._klines_period,
+                                                                 size=self._klines_length)
+                self._get_history_kline_callback(success, error)
+        SingleTask.run(get_history_Klines)
+
         for ch in self._channels:
             if ch == "kline":
-                for contract_type in self._contract_types:
-                    channel = self._symbol_to_channel(contract_type, "kline")
-                    if not channel:
-                        continue
-                    kline = {
-                        "sub": channel
-                    }
-                    await self.ws.send_json(kline)
+                channel = self._symbol_to_channel(self._contract_type, "kline")
+                if not channel:
+                    continue
+                kline = {
+                    "sub": channel
+                }
+                await self.ws.send_json(kline)
             elif ch == "orderbook":
-                for contract_type in self._contract_types:
-                    channel = self._symbol_to_channel(contract_type, "depth")
-                    if not channel:
-                        continue
-                    data = {
-                        "sub": channel
-                    }
-                    await self.ws.send_json(data)
+                channel = self._symbol_to_channel(self._contract_type, "depth")
+                if not channel:
+                    continue
+                data = {
+                    "sub": channel
+                }
+                await self.ws.send_json(data)
             elif ch == "trade":
-                for contract_type in self._contract_types:
-                    channel = self._symbol_to_channel(contract_type, "trade")
-                    if not channel:
-                        continue
-                    data = {
-                        "sub": channel
-                    }
-                    await self.ws.send_json(data)
+                channel = self._symbol_to_channel(self._contract_type, "trade")
+                if not channel:
+                    continue
+                data = {
+                    "sub": channel
+                }
+                await self.ws.send_json(data)
             else:
                 logger.error("channel error! channel:", ch, caller=self)
 
@@ -137,9 +151,9 @@ class HuobiDeliveryMarket(Websocket):
             channel_type: channel name, kline / ticker / depth.
         """
         if channel_type == "kline":
-            channel = "market.{s}.kline.1min".format(s=symbol.upper())
+            channel = "market.{s}.kline.{p}".format(s=symbol.upper(), p=self._klines_period)
         elif channel_type == "depth":
-            channel = "market.{s}.depth.step6".format(s=symbol.upper())
+            channel = "market.{s}.depth.{d}".format(s=symbol.upper(), d=self._orderbook_step)
         elif channel_type == "trade":
             channel = "market.{s}.trade.detail".format(s=symbol.upper())
         else:
@@ -147,29 +161,57 @@ class HuobiDeliveryMarket(Websocket):
             return None
         self._c_to_s[channel] = symbol
         return channel
-    
+
+    def _get_history_kline_callback(self, success, error):
+        if error:
+            logger.error("get_history_kline error:", error, caller=self)
+        history_klines = success.get("data")
+        ts = int(success.get("ts"))
+        for k in history_klines:
+            info = {
+                "platform": self._platform,
+                "id": int(k["id"]),
+                "symbol": self._contract_type,
+                "open": "%.8f" % k["open"],
+                "high": "%.8f" % k["high"],
+                "low": "%.8f" % k["low"],
+                "close": "%.8f" % k["close"],
+                "volume": int(k["vol"]),
+                "amount": "%.8f" % k["amount"],
+                "timestamp": ts,
+                "kline_type": MARKET_TYPE_KLINE
+            }
+            kline = Kline(**info)
+            self._klines.append(kline)
+
     async def process_kline(self, data):
         """ process kline data
         """
+        if len(self._klines) < self._klines_length:
+            logger.info("klines not init. current:", len(self.klines), caller=self)
+            return
         channel = data.get("ch")
         symbol = self._c_to_s[channel]
         d = data.get("tick")
         info = {
             "platform": self._platform,
+            "id": int(d["id"]),
             "symbol": symbol,
             "open": "%.8f" % d["open"],
             "high": "%.8f" % d["high"],
             "low": "%.8f" % d["low"],
             "close": "%.8f" % d["close"],
-            "volume": "%.8f" % d["amount"],
+            "volume": int(d["vol"]),
+            "amount": "%.8f" % d["amount"],
             "timestamp": int(data.get("ts")),
             "kline_type": MARKET_TYPE_KLINE
         }
         kline = Kline(**info)
+        if kline.id == self._klines[-1].id:
+            self._klines.pop()
         self._klines.append(kline)
         SingleTask.run(self._kline_update_callback, copy.copy(kline))
-
-        logger.debug("symbol:", symbol, "kline:", kline, caller=self)
+        # logger.debug("symbol:", symbol, "kline:", kline, caller=self)
 
     async def process_orderbook(self, data):
         """ process orderbook data
@@ -206,7 +248,7 @@ class HuobiDeliveryMarket(Websocket):
         channel = data.get("ch")
         symbol = self._c_to_s[channel]
         ticks = data.get("tick")
-        for tick in ticks["data"]: 
+        for tick in ticks["data"]:
             direction = tick.get("direction")
             price = tick.get("price")
             quantity = tick.get("amount")
