@@ -6,12 +6,17 @@ def make_zip(config):
     zipf = zipfile.ZipFile(config.zipFilePath, 'w')
     pre_len = len(os.path.dirname(config.basePath))
     for parent, dirnames, filenames in os.walk(config.basePath):
+        if ".git" in parent:
+            continue
+        if "__pycache__" in parent:
+            continue
         if parent.endswith("deploy"):
             continue
         if parent.endswith(".idea"):
             continue
         if parent.endswith("inspectionProfiles"):
             continue
+        print(parent)
         for filename in filenames:
             print(filename)
             pathfile = os.path.join(parent, filename)
@@ -76,7 +81,7 @@ class Config:
     def __init__(self):
         self.absPath = sys.path[0]
         self.basePath = self.absPath[0:-7]
-        self.zipfilename = "coin-client-%s.zip" % (time.strftime("%Y%m%d%H%M%S", time.localtime()))
+        self.zipfilename = "hbdm-client-%s.zip" % (time.strftime("%Y%m%d%H%M%S", time.localtime()))
         self.zipFilePath = os.path.join(self.absPath, self.zipfilename)
         self.ip = None
         self.user = None
@@ -99,11 +104,11 @@ class Config:
 if __name__ == '__main__':
     config = Config()
     make_zip(config)
-    print("压缩完毕")
-
-    s = open_ssh(config)
-    ssh_put(s, config)
-    cmd = "cd %s; unzip -o %s;" %(config.remove_path, config.zipfilename)
-    ssh_cmd(s, cmd)
-    close_ssh(s)
-    print("推送完毕")
+    # print("压缩完毕")
+    #
+    # s = open_ssh(config)
+    # ssh_put(s, config)
+    # cmd = "cd %s; unzip -o %s;" %(config.remove_path, config.zipfilename)
+    # ssh_cmd(s, cmd)
+    # close_ssh(s)
+    # print("推送完毕")
