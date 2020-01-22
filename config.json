@@ -14,8 +14,8 @@
             "account": "account",
             "host": "https://api.btcgateway.pro",
             "wss": "wss://api.btcgateway.pro",
-            "access_key": "xxx",
-            "secret_key": "xxx"
+            "access_key": "xxxx",
+            "secret_key": "xxxx"
         }
     ],
     "MARKETS": [
@@ -36,5 +36,7 @@
     ],
     "strategy": "ma_strategy",
     "symbol": "BCH",
-    "contract_type": "BCH_CW"
+    "contract_type": "this_week",
+    "lever_rate": 10,
+    "place_num": 1
 }

@@ -95,14 +95,11 @@ class HuobiDeliveryTrade(Websocket):
         self._order_channel = "orders.{symbol}".format(symbol=self._symbol)  # 订阅订单成交数据
         self._position_channel = "positions.{symbol}".format(symbol=self._symbol)  # 订阅某个品种下的持仓变动信息
         self._asset_channel = "accounts.{symbol}".format(symbol=self._symbol)  # 订阅某个品种下的资产变动信息
-
         self._subscribe_order_ok = False
         self._subscribe_position_ok = False
         self._subscribe_asset_ok = False
 
-
         self.initialize()
-
 
     @property
     def assets(self):
@@ -119,6 +116,18 @@ class HuobiDeliveryTrade(Websocket):
     @property
     def rest_api(self):
         return self._rest_api
+
+    def init_data(self):
+        return self._subscribe_order_ok and self._subscribe_position_ok and self._subscribe_asset_ok
+
+    def _reconnect(self):
+        self._subscribe_order_ok = False
+        self._subscribe_position_ok = False
+        self._subscribe_asset_ok = False
+        self._assets = {}
+        self._orders = {}
+        self._position = Position(self._platform, self._account, self._strategy, self._symbol + '/' + self._contract_type)
+        super(HuobiDeliveryTrade, self)._reconnect()
 
     async def _send_heartbeat_msg(self, *args, **kwargs):
         data = {"pong": int(time.time()*1000)}
@@ -161,8 +170,6 @@ class HuobiDeliveryTrade(Websocket):
             logger.error(e, caller=self)
             SingleTask.run(self._init_success_callback, False, e)
             return
-
-        # subscribe order
         data = {
             "op": "sub",
             "cid": tools.get_uuid1(),
@@ -281,22 +288,6 @@ class HuobiDeliveryTrade(Websocket):
         return str(result["data"]["order_id"]), None
     
     async def create_orders(self, orders, *args, **kwargs):
-        """ batch create orders
-        
-        Args:
-            orders_data: [] 
-            list item:
-                action: Trade direction, BUY or SELL.
-                price: Price of each contract.
-                quantity: The buying or selling quantity.
-                order_type: Order type, LIMIT or MARKET.
-                lever_rate: leverage.
-            kwargs:
-                
-        Returns:
-            success: order info  if created successfully.
-            error: erros information.
-        """
         orders_data = []
         for order in orders:
             if int(order["quantity"]) > 0:
@@ -343,20 +334,10 @@ class HuobiDeliveryTrade(Websocket):
         result, error = await self._rest_api.create_orders({"orders_data": orders_data})
         if error:
             return None, error
-        order_nos = [ order["order_id"] for order in result.get("data").get("success")]
+        order_nos = [order["order_id"] for order in result.get("data").get("success")]
         return order_nos, result.get("data").get("errors")
         
     async def revoke_order(self, *order_nos):
-        """ Revoke (an) order(s).
-
-        Args:
-            order_nos: Order id list, you can set this param to 0 or multiple items. If you set 0 param, you can cancel
-                all orders for this symbol(initialized in Trade object). If you set 1 param, you can cancel an order.
-                If you set multiple param, you can cancel multiple orders. Do not set param length more than 100.
-
-        Returns:
-            Success or error, see bellow.
-        """
         # If len(order_nos) == 0, you will cancel all orders for this symbol(initialized in Trade object).
         if len(order_nos) == 0:
             success, error = await self._rest_api.revoke_order_all(self._symbol, '', self._contract_type)
@@ -407,12 +388,11 @@ class HuobiDeliveryTrade(Websocket):
             return order_nos, None
 
     def _update_order(self, order_info):
-        """ Order update.
-
-        Args:
-            order_info: Order information.
-        """
-        if order_info["contract_code"] != self._symbol:
+        # print("_update_order")
+        # print(order_info)
+        if order_info["symbol"] != self._symbol:
+            return
+        if order_info["contract_type"] != self._contract_type:
             return
         order_no = str(order_info["order_id"])
         status = order_info["status"]
@@ -472,16 +452,12 @@ class HuobiDeliveryTrade(Websocket):
         logger.info("symbol:", order.symbol, "order:", order, caller=self)
 
     def _update_position(self, data):
-        """ Position update.
-
-        Args:
-            position_info: Position information.
-
-        Returns:
-            None.
-        """
+        # print("_update_position", self._symbol)
+        # print(data)
         for position_info in data["data"]:
-            if position_info["contract_code"] != self._symbol:
+            if position_info["symbol"] != self._symbol:
+                continue
+            if position_info["contract_type"] != self._contract_type:
                 continue
             if position_info["direction"] == "buy":
                 self._position.long_quantity = int(position_info["volume"])
@@ -492,16 +468,10 @@ class HuobiDeliveryTrade(Websocket):
             # self._position.liquid_price = None
             self._position.utime = data["ts"]
             SingleTask.run(self._position_update_callback, copy.copy(self._position))
-    
-    def _update_asset(self, data):
-        """ Asset update.
 
-        Args:
-            data: asset data.
-        
-        Returns:
-            None.
-        """
+    def _update_asset(self, data):
+        # print("_update_asset")
+        # print(data)
         assets = {}
         for item in data["data"]:
             symbol = item["symbol"].upper()

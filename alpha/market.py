@@ -1,39 +1,12 @@
-# -*- coding:utf-8 -*-
-
-"""
-Market Module.
-
-Author: QiaoXiaofeng
-Date:   2020/01/10
-Email:  andyjoe318@gmail.com
-"""
-
 import copy
 
 from alpha import const
 from alpha.utils import logger
+from alpha.error import Error
+from alpha.tasks import SingleTask
 
 
 class Market:
-    """ Market Module.
-
-    Attributes:
-        platform: Exchange platform name. e.g. `huobi_swap`.
-        symbols: Symbol name for your trade. e.g. [`BTC-USD`]
-        channels: sub channels.e.g.['kline', 'orderbook', 'trade']
-        orderbook_length: max orderbook length.default 10.
-        wss: Websocket address.
-        orderbook_update_callback: You can use this param to specific a async callback function when you initializing Market
-            object. `orderbook_update_callback` is like `async def on_orderbook_update_callback(orderbook: Orderbook): pass` and this
-            callback function will be executed asynchronous when received AssetEvent.
-        kline_update_callback: You can use this param to specific a async callback function when you initializing Market
-            object. `kline_update_callback` is like `async def on_kline_update_callback(kline: Kline): pass` and this
-            callback function will be executed asynchronous when some order state updated.
-        trade_update_callback: You can use this param to specific a async callback function when you initializing
-            Market object. `trade_update_callback` is like `async def on_trade_update_callback(trade: Trade): pass`
-            and this callback function will be executed asynchronous when trade updated.
-    """
-
     def __init__(self, platform=None, symbol=None, contract_type=None, channels=None, orderbook_length=None,
                  orderbook_step=None, orderbooks_length=None, klines_length=None, klines_period=None,
                  trades_length=None, wss=None, orderbook_update_callback=None, kline_update_callback=None,
@@ -41,7 +14,6 @@ class Market:
         """initialize trade object."""
         kwargs["platform"] = platform
         kwargs["symbol"] = symbol
-        kwargs["contract_type"] = contract_type
         kwargs["channels"] = channels
         kwargs["orderbook_length"] = orderbook_length
         kwargs["orderbook_step"] = orderbook_step
@@ -55,6 +27,16 @@ class Market:
         kwargs["kline_update_callback"] = kline_update_callback
         kwargs["trade_update_callback"] = trade_update_callback
         kwargs["rest_api"] = rest_api
+
+        if contract_type == "this_week":
+            kwargs["contract_type"] = symbol + "_CW"
+        elif contract_type == "next_week":
+            kwargs["contract_type"] = symbol + "_NW"
+        elif contract_type == "quarter":
+            kwargs["contract_type"] = symbol + "_CQ"
+        else:
+            logger.error("is deliverd. symbol:", symbol, "contract_type:", contract_type, caller=self)
+            return
 
         self._raw_params = copy.copy(kwargs)
         self._on_orderbook_update_callback = orderbook_update_callback
@@ -86,3 +68,6 @@ class Market:
     @property
     def rest_api(self):
         return self._rest_api
+
+    def init_data(self):
+        return self._m.init_data()

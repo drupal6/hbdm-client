@@ -20,30 +20,6 @@ from alpha.position import Position
 
 
 class Trade:
-    """ Trade Module.
-
-    Attributes:
-        strategy: What's name would you want to created for your strategy.
-        platform: Exchange platform name. e.g. `huobi_swap`.
-        symbol: Symbol name for your trade. e.g. `BTC-USD`.
-        host: HTTP request host.
-        wss: Websocket address.
-        account: Account name for this trade exchange.
-        access_key: Account's ACCESS KEY.
-        secret_key: Account's SECRET KEY.
-        asset_update_callback: You can use this param to specific a async callback function when you initializing Trade
-            object. `asset_update_callback` is like `async def on_asset_update_callback(asset: Asset): pass` and this
-            callback function will be executed asynchronous when received AssetEvent.
-        order_update_callback: You can use this param to specific a async callback function when you initializing Trade
-            object. `order_update_callback` is like `async def on_order_update_callback(order: Order): pass` and this
-            callback function will be executed asynchronous when some order state updated.
-        position_update_callback: You can use this param to specific a async callback function when you initializing
-            Trade object. `position_update_callback` is like `async def on_position_update_callback(position: Position): pass`
-            and this callback function will be executed asynchronous when position updated.
-        init_success_callback: You can use this param to specific a async callback function when you initializing Trade
-            object. `init_success_callback` is like `async def on_init_success_callback(success: bool, error: Error, **kwargs): pass`
-            and this callback function will be executed asynchronous after Trade module object initialized successfully.
-    """
 
     def __init__(self, strategy=None, platform=None, symbol=None, contract_type=None, host=None, wss=None, account=None,
                  access_key=None, secret_key=None, asset_update_callback=None, order_update_callback=None,
@@ -97,6 +73,9 @@ class Trade:
     @property
     def rest_api(self):
         return self._rest_api
+
+    def init_data(self):
+        return self._t.init_data()
 
     async def create_order(self, action, price, quantity, order_type=ORDER_TYPE_LIMIT, **kwargs):
         """ Create an order.
@@ -172,12 +151,6 @@ class Trade:
             SingleTask.run(self._position_update_callback, position)
 
     async def _on_init_success_callback(self, success: bool, error: Error):
-        """ Callback function when initialize Trade module finished.
-
-        Args:
-            success: `True` if initialize Trade module success, otherwise `False`.
-            error: `Error object` if initialize Trade module failed, otherwise `None`.
-        """
         if self._init_success_callback:
             params = {
                 "strategy": self._raw_params["strategy"],

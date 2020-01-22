@@ -42,6 +42,8 @@ class MaStrategy:
         self.host = config.accounts[0]["host"]
         self.wss = config.accounts[0]["wss"]
         self.symbol = config.symbol
+        self.lever_rate = config.lever_rate
+        self.place_num = config.place_num
         self.contract_type = config.contract_type
         self.channels = config.markets[0]["channels"]
         self.orderbook_length = config.markets[0]["orderbook_length"]
@@ -54,9 +56,10 @@ class MaStrategy:
 
         self.orderbook_invalid_seconds = 0.5
 
-        self.last_bid_price = 0 # 上次的买入价格
-        self.last_ask_price = 0 # 上次的卖出价格
-        self.last_orderbook_timestamp = 0 # 上次的orderbook时间戳
+        self.last_bid_price = 0  # 上次的买入价格
+        self.last_ask_price = 0  # 上次的卖出价格
+        self.last_orderbook_timestamp = 0  # 上次的orderbook时间戳
+        self.last_open_order_time = 0  #上次开单时间
 
         self.raw_symbol = self.symbol.split('-')[0]
 
@@ -67,6 +70,8 @@ class MaStrategy:
 
         self.periods = [5, 10]
 
+        self.trade_init_result = False
+
         # rest api
         if self.platform == HUOBI_SWAP:
             from alpha.platforms.swap.huobi_swap_api import HuobiSwapRestAPI
@@ -74,7 +79,6 @@ class MaStrategy:
         elif self.platform == HUOBI_DELIVERY:
             from alpha.platforms.delivery.huobi_delivery_api import HuobiDeliveryRestAPI
             self._rest_api = HuobiDeliveryRestAPI(self.host, self.access_key, self.secret_key)
-
 
         # 交易模块
         cc = {
@@ -91,7 +95,7 @@ class MaStrategy:
             "order_update_callback": self.on_event_order_update,
             "asset_update_callback": self.on_event_asset_update,
             "position_update_callback": self.on_event_position_update,
-            "init_success_callback": self.on_event_init_success_callback,
+            "init_success_callback": self.on_event_init_trade_success_callback,
         }
         self.trader = Trade(**cc)
 
@@ -111,7 +115,7 @@ class MaStrategy:
             "rest_api": self._rest_api,
             "orderbook_update_callback": self.on_event_orderbook_update,
             "kline_update_callback": self.on_event_kline_update,
-            "trade_update_callback": self.on_event_trade_update
+            "trade_update_callback": self.on_event_trade_update,
         }
         self.market = Market(**cc)
         
@@ -119,8 +123,18 @@ class MaStrategy:
         LoopRunTask.register(self.on_ticker, 5)
 
     async def on_ticker(self, *args, **kwargs):
+        if not self.trade_init_result:
+            logger.error("trade not init.", caller=self)
+            return
+        if not self.market.init_data():
+            logger.error("not init market data.", caller=self)
+            return
+        if not self.trader.init_data():
+            logger.error("not init trader data.", caller=self)
+            return
         klines = self.market.klines
-        if len(klines) != self.klines_length:
+        if klines[-1].id == self.last_open_order_time:
+            logger.info("haved order. ordertime:", self.last_open_order_time, caller=self)
             return
         ma_point = interval_handler(values=klines, periods=self.periods, vtype="close")
         if ma_point[self.periods[0]][1] < ma_point[self.periods[1]][1]:
@@ -154,7 +168,7 @@ class MaStrategy:
             action = ORDER_ACTION_BUY
             new_price = str(price)  # 将价格转换为字符串，保持精度
             if quantity:
-                orders_data.append({"price": new_price, "quantity": quantity, "action": action, "order_type": ORDER_TYPE_LIMIT, "lever_rate": 1})
+                orders_data.append({"price": new_price, "quantity": quantity, "action": action, "order_type": ORDER_TYPE_LIMIT, "lever_rate": self.lever_rate})
                 self.last_ask_price = self.ask1_price
         if self.trader.assets and self.trader.assets.assets.get(self.raw_symbol):
             # 开空单
@@ -165,7 +179,7 @@ class MaStrategy:
                 action = ORDER_ACTION_SELL
                 new_price = str(price)  # 将价格转换为字符串，保持精度
                 if quantity:
-                    orders_data.append({"price": new_price, "quantity": quantity, "action": action, "order_type": ORDER_TYPE_LIMIT, "lever_rate": 1})
+                    orders_data.append({"price": new_price, "quantity": quantity, "action": action, "order_type": ORDER_TYPE_LIMIT, "lever_rate": self.lever_rate})
                     self.last_bid_price = self.bid1_price
 
         if orders_data:
@@ -191,34 +205,43 @@ class MaStrategy:
     async def on_event_order_update(self, order: Order):
         """ 订单状态更新
         """
-        logger.debug("order update:", order, caller=self)
+        print("on_event_order_update")
+        print(order.__str__())
 
     async def on_event_asset_update(self, asset: Asset):
         """ 资产更新
         """
-        logger.debug("asset update:", asset, caller=self)
+        print("on_event_asset_update")
+        print(asset.__str__())
 
     async def on_event_position_update(self, position: Position):
         """ 仓位更新
         """
-        logger.debug("position update:", position, caller=self)
+        print("on_event_position_update")
+        print(position.__str__())
     
     async def on_event_kline_update(self, kline: Kline):
         """ kline更新
             self.market.klines 是最新的kline组成的队列，记录的是历史N次kline的数据。
             本回调所传的kline是最新的单次kline。
         """
-        logger.debug("kline update:", kline, caller=self)
+        print("on_event_kline_update")
+        print(kline.__str__())
     
     async def on_event_trade_update(self, trade: MarketTrade):
         """ market trade更新
             self.market.trades 是最新的逐笔成交组成的队列，记录的是历史N次trade的数据。
             本回调所传的trade是最新的单次trade。
         """
-        logger.debug("trade update:", trade, caller=self)
+        print("on_event_trade_update")
+        print(trade.__str__())
     
-    async def on_event_init_success_callback(self, success: bool, error: Error, **kwargs):
+    async def on_event_init_trade_success_callback(self, success: bool, error: Error, **kwargs):
         """ init success callback
         """
-        logger.debug("init success callback update:", success, error, kwargs, caller=self)
+        if not success:
+            logger.error("init trade error callback update:", success, error, kwargs, caller=self)
+        else:
+            self.trade_init_result = True
+
 

@@ -23,6 +23,8 @@ from alpha.tasks import SingleTask
 from alpha.orderbook import Orderbook
 from alpha.markettrade import Trade
 from alpha.kline import Kline
+from alpha.error import Error
+
 
 class HuobiDeliveryMarket(Websocket):
 
@@ -47,6 +49,7 @@ class HuobiDeliveryMarket(Websocket):
         self._orderbooks = deque(maxlen=self._orderbooks_length) 
         self._klines = deque(maxlen=self._klines_length)
         self._trades = deque(maxlen=self._trades_length)
+        self._klines_init = False
 
         url = self._wss + "/ws"
         super(HuobiDeliveryMarket, self).__init__(url, send_hb_interval=5)
@@ -68,8 +71,16 @@ class HuobiDeliveryMarket(Websocket):
     def rest_api(self):
         return self._rest_api
 
-    def clear_data(self):
-        self
+    def init_data(self):
+        return self._klines_init
+
+    async def _reconnect(self):
+        self._klines_init = False
+        self._c_to_s = {}
+        self._orderbooks.clear()
+        self._klines.clear()
+        self._trades.clear()
+        super(HuobiDeliveryMarket, self)._reconnect()
 
     async def _send_heartbeat_msg(self, *args, **kwargs):
         """ 发送心跳给服务器
@@ -81,15 +92,31 @@ class HuobiDeliveryMarket(Websocket):
         await self.ws.send_json(data)
 
     async def connected_callback(self):
-        """ After create Websocket connection successfully, we will subscribing orderbook/trade events.
         """
-        async def get_history_Klines():
-                success, error = await self._rest_api.get_klines(contract_type=self._contract_type,
-                                                                 period=self._klines_period,
-                                                                 size=self._klines_length)
-                self._get_history_kline_callback(success, error)
-        SingleTask.run(get_history_Klines)
+        链接成功初始数据和加监听
+        :return:
+        """
+        self._init_data()
+        SingleTask.run(self._add_sub)
 
+
+    def _init_data(self):
+        """
+        初始必要数据
+        :return:
+        """
+        async def init_history_Klines():
+            success, error = await self._rest_api.get_klines(contract_type=self._contract_type,
+                                                             period=self._klines_period,
+                                                             size=self._klines_length)
+            self._init_history_kline_callback(success, error)
+        SingleTask.run(init_history_Klines)
+
+    async def _add_sub(self):
+        """
+        加监听
+        :return:
+        """
         for ch in self._channels:
             if ch == "kline":
                 channel = self._symbol_to_channel(self._contract_type, "kline")
@@ -118,6 +145,19 @@ class HuobiDeliveryMarket(Websocket):
             else:
                 logger.error("channel error! channel:", ch, caller=self)
 
+    def _symbol_to_channel(self, contract_type, channel_type):
+        if channel_type == "kline":
+            channel = "market.{s}.kline.{p}".format(s=contract_type.upper(), p=self._klines_period)
+        elif channel_type == "depth":
+            channel = "market.{s}.depth.{d}".format(s=contract_type.upper(), d=self._orderbook_step)
+        elif channel_type == "trade":
+            channel = "market.{s}.trade.detail".format(s=contract_type.upper())
+        else:
+            logger.error("channel type error! channel type:", channel_type, caller=self)
+            return None
+        self._c_to_s[channel] = contract_type
+        return channel
+
     async def process_binary(self, msg):
         """ Process binary message that received from Websocket connection.
         """
@@ -130,8 +170,6 @@ class HuobiDeliveryMarket(Websocket):
                 await self.ws.send_json(hb_msg)
             return
 
-        symbol = self._c_to_s[channel]
-
         if channel.find("kline") != -1:
             await self.process_kline(data)
 
@@ -143,35 +181,19 @@ class HuobiDeliveryMarket(Websocket):
         else:
             logger.error("event error! msg:", msg, caller=self)
 
-    def _symbol_to_channel(self, symbol, channel_type):
-        """ Convert symbol to channel.
-
-        Args:
-            symbol: Trade pair name.such as BTC-USD
-            channel_type: channel name, kline / ticker / depth.
-        """
-        if channel_type == "kline":
-            channel = "market.{s}.kline.{p}".format(s=symbol.upper(), p=self._klines_period)
-        elif channel_type == "depth":
-            channel = "market.{s}.depth.{d}".format(s=symbol.upper(), d=self._orderbook_step)
-        elif channel_type == "trade":
-            channel = "market.{s}.trade.detail".format(s=symbol.upper())
-        else:
-            logger.error("channel type error! channel type:", channel_type, caller=self)
-            return None
-        self._c_to_s[channel] = symbol
-        return channel
-
-    def _get_history_kline_callback(self, success, error):
+    def _init_history_kline_callback(self, success, error):
         if error:
-            logger.error("get_history_kline error:", error, caller=self)
+            logger.error("init history_kline error:", error, caller=self)
+            return
         history_klines = success.get("data")
+        # print("_get_history_kline_callback")
+        # print(history_klines)
         ts = int(success.get("ts"))
         for k in history_klines:
             info = {
                 "platform": self._platform,
                 "id": int(k["id"]),
-                "symbol": self._contract_type,
+                "symbol": self._symbol,
                 "open": "%.8f" % k["open"],
                 "high": "%.8f" % k["high"],
                 "low": "%.8f" % k["low"],
@@ -183,16 +205,19 @@ class HuobiDeliveryMarket(Websocket):
             }
             kline = Kline(**info)
             self._klines.append(kline)
+        self._klines_init = True
 
     async def process_kline(self, data):
         """ process kline data
         """
-        if len(self._klines) < self._klines_length:
+        if not self._klines_init:
             logger.info("klines not init. current:", len(self.klines), caller=self)
             return
         channel = data.get("ch")
         symbol = self._c_to_s[channel]
         d = data.get("tick")
+        # print("process_kline", symbol)
+        # print(d)
         info = {
             "platform": self._platform,
             "id": int(d["id"]),
@@ -219,6 +244,8 @@ class HuobiDeliveryMarket(Websocket):
         channel = data.get("ch")
         symbol = self._c_to_s[channel]
         d = data.get("tick")
+        # print("process_orderbook", symbol)
+        # print(d)
         asks, bids = [], []
         if d.get("asks"):
             for item in d.get("asks")[:self._orderbook_length]:
@@ -248,6 +275,8 @@ class HuobiDeliveryMarket(Websocket):
         channel = data.get("ch")
         symbol = self._c_to_s[channel]
         ticks = data.get("tick")
+        # print("process_trade", symbol)
+        # print(ticks)
         for tick in ticks["data"]:
             direction = tick.get("direction")
             price = tick.get("price")

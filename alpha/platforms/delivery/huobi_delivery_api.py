@@ -160,7 +160,7 @@ class HuobiDeliveryRestAPI:
         :param price:价格
         :return:
         """
-        uri = "/swap-api/v1/swap_order"
+        uri = "/api/v1/contract_order"
         body = {
             "symbol": symbol,
             "contract_type": contract_type,
