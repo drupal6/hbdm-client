@@ -29,6 +29,22 @@ from alpha.error import Error
 class HuobiDeliveryMarket(Websocket):
 
     def __init__(self, **kwargs):
+        """
+        _platform
+        _wss
+        _contract_type 如"BTC_CW"表示BTC当周合约，"BTC_NW"表示BTC次周合约，"BTC_CQ"表示BTC季度合约
+        _channels
+        _orderbook_length
+        _orderbook_step
+        _orderbooks_length
+        _klines_length
+        _klines_period
+        _trades_length
+        _orderbook_update_callback  行情更新回调
+        _kline_update_callback    kline更新回调
+        _trade_update_callback   交易更新回调
+        :param kwargs:
+        """
         self._platform = kwargs["platform"]
         self._wss = kwargs.get("wss", "wss://www.hbdm.com")
         self._symbol = kwargs.get("symbol")
